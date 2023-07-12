@@ -207,5 +207,15 @@ qc_ranked_intensities(
   y_axis_transformation = "log2"
 )
 
+# 8. Removing Problematic Samples 
+# Remove instances where SampleName == "NP21"
+protein_data_long <- dplyr::filter(
+    protein_data_long,
+    SampleName != "NP21"
+)
 
-#
+# 9. Removing Highly Missing Proteins
+# Remove proteins with missing values in more than 75% of samples
+# TODO: This is a custom solution, WIP
+
+
