@@ -65,5 +65,147 @@ protein_data_long <- dplyr::rename(
 
 ## Quality Checks and Data Filtering
 
-# Co-efficients of Variation (CV)
+# 1. Number of Identified Proteins per Samples
+plot <- qc_ids(
+    data = protein_data_long,
+    sample = SampleName, 
+    grouping = Protein,
+    condition = SampleType,
+    intensity = Intensity,
+    plot = TRUE
+)
+# Visualize the plot
+plot
 
+# Sort the bars by the number of proteins
+plot + ggplot2::coord_flip()
+
+# Rotate the x-axis labels
+plot + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 90, hjust = 1)
+)
+
+# 2. Intensity Distribution and Median Intensity Plots
+#   a. Intensity Distribution
+qc_intensity_distribution(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity_log2 = Intensity,
+    plot_style = "boxplot"
+)
+# Create a log2 transformed intensity column
+protein_data_long$Intensity_log2 <- log2(protein_data_long$Intensity)
+# Plot again with log2 transformed intensity
+qc_intensity_distribution(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity_log2 = Intensity_log2,
+    plot_style = "boxplot"
+)
+
+#   b. Median Intensity Plot
+# DESCRIPTION: Plot the median intensity of each protein across samples as a lineplot
+qc_median_intensities(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity = Intensity_log2
+)
+
+# 3. Co-efficients of Variation (CV)
+# protti::qc_cvs() # Return DF or Plot (boxplot, violin, or density)
+
+# Within Sample CVs
+qc_cvs(
+    data = protein_data_long,
+    grouping = Protein,
+    condition = SampleName,
+    intensity = Intensity,
+    plot = TRUE,
+    plot_style="boxplot"
+)
+
+# Within SampleType CVs (Patient, Cell Line, PDX)
+qc_cvs(
+    data = protein_data_long,
+    grouping = Protein,
+    condition = SampleType,
+    intensity = Intensity,
+    plot = TRUE,
+    plot_style="boxplot"
+)
+
+# CVs between Samples in Patient+BALL, Patient+ALL, Cell Line+BALL, Cell Line+ALL, PDX+BALL, PDX+ALL
+# Combine CVs between SampleType+Disease
+protein_data_long$SampleType_Disease <- paste(
+    protein_data_long$SampleType,
+    protein_data_long$Disease,
+    sep = "_"
+)
+
+qc_cvs(
+    data = protein_data_long,
+    grouping = Protein,
+    condition = SampleType_Disease,
+    intensity = Intensity,
+    plot = TRUE,
+    plot_style="boxplot"
+)
+
+# 4. Data Completeness
+qc_data_completeness(
+    data = protein_data_long,
+    sample = Sample,
+    grouping = Protein,
+    intensity = Intensity_log2,
+    plot = TRUE
+)
+
+# 5. Sample Correlation
+# NOTE: Requires pheatmap & seriation packages
+qc_sample_correlation(
+    data = protein_data_long,
+    sample = Sample,
+    grouping = Protein,
+    intensity = Intensity_log2,
+    condition = SampleType,
+    interactive = FALSE, 
+    method = "pearson",
+)
+
+# 6. Principal Component Analysis (PCA)
+
+qc_pca(
+  data = protein_data_long,
+  sample = Sample,
+  grouping = Protein,
+  intensity = Intensity_log2,
+  condition = SampleType,
+  digestion = NULL,
+  plot_style = "scree"
+)
+
+qc_pca(
+  data = protein_data_long,
+  sample = Sample,
+  grouping = Protein,
+  intensity = Intensity_log2,
+  condition = SampleType,
+  digestion = NULL,
+  plot_style = "pca"
+)
+
+# 7. Ranked Intensity Distribution (Protein-Rank Plot)
+qc_ranked_intensities(
+  data = protein_data_long,
+  sample = Sample,
+  grouping = Protein,
+  intensity_log2 = Intensity_log2,
+  plot = TRUE,
+  y_axis_transformation = "log2"
+)
+
+
+#
