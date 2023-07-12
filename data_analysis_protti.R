@@ -218,4 +218,16 @@ protein_data_long <- dplyr::filter(
 # Remove proteins with missing values in more than 75% of samples
 # TODO: This is a custom solution, WIP
 
+# 10. Re-visiting Some QC Plots
+qc_pca(
+  data = protein_data_long,
+  sample = Sample,
+  grouping = Protein,
+  intensity = Intensity_log2,
+  condition = SampleType,
+  digestion = NULL,
+  plot_style = "pca"
+)
 
+
+## Data Normalization
