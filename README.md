@@ -10,5 +10,6 @@ All workshop materials from the BCCHR Trainee Omics Group's Proteomics Workshop 
   - `protti`
   - `pheatmap`
   - `seriation`
+  - `dendextend`
   - `gprofiler2`
   - `Bioconductor/Limma`
