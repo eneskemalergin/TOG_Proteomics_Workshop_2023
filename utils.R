@@ -32,7 +32,7 @@ impute_with_downshifted_normal <- function(
         ) %>%
         dplyr::mutate(
             imputed_intensity_log2 = ifelse(
-                is.na( imputed_intensity_log2 ),
+                is.na(imputed_intensity_log2),
                 rnorm(
                     n = sum(is.na(imputed_intensity_log2)),
                     mean = mu,
@@ -50,4 +50,65 @@ impute_with_downshifted_normal <- function(
         )
 
     return(data)
+}
+
+plot_volcano <- function(
+    data,
+    pval_thr = 0.05,
+    log2_fc_thr = 1,
+    title = "Volcano Plot",
+    point_size = 2
+) {
+    # NOTE: This function expects the following columns
+    # in the data frame as they appear.
+    # - log2_fc
+    # - adj_pvalues
+    # - significance
+
+
+    p <- ggplot2::ggplot(
+        data,
+        ggplot2::aes(
+            x = log2_fc,
+            y = -log10(adj_pvalues),
+            color = significance,
+            alpha = significance
+        )
+    ) +
+    ggplot2::geom_point(size = point_size) +
+    ggplot2::geom_vline(
+        xintercept = log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::geom_vline(
+        xintercept = -log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::geom_hline(
+        yintercept = -log10(pval_thr),
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::scale_color_manual(
+        values = c(
+            "Up regulated" = "#e63946",
+            "Down regulated" = "#1d3557",
+            "no significance" = "#b1a7a6"
+        )
+    ) +
+    ggplot2::scale_alpha_manual(
+        values = c(
+            "Up regulated" = 1.0,
+            "Down regulated" = 1.0,
+            "no significance" = 0.2
+        )
+    ) +
+    ggplot2::ggtitle(title) +
+    ggplot2::labs(
+        x = "log2(Fold-Change)",
+        y = "-log10(adjusted p-value)"
+    )
+    return(p)
 }

@@ -132,7 +132,7 @@ qc_cvs(
     condition = SampleType,
     intensity = Intensity,
     plot = TRUE,
-    plot_style="boxplot"
+    plot_style = "boxplot"
 )
 
 # CVs between Samples in
@@ -152,7 +152,7 @@ qc_cvs(
     condition = SampleType_Disease,
     intensity = Intensity,
     plot = TRUE,
-    plot_style="boxplot"
+    plot_style = "boxplot"
 )
 
 # 4. Data Completeness
@@ -318,4 +318,203 @@ cowplot::plot_grid(
     align = "v"
 )
 
-protein_data_long
+## Statistical Testing with Weighted Limma
+
+# Transform the long to wide format
+# columns:Sample, rows: Protein, values: imputed_intensity_log2
+protein_data_wide <- protein_data_long %>%
+    dplyr::select(
+        Sample,
+        Protein,
+        imputed_intensity_log2
+    ) %>%
+    tidyr::pivot_wider(
+        names_from = Sample,
+        values_from = imputed_intensity_log2
+    ) %>%
+    tibble::column_to_rownames(
+        var = "Protein"
+    )
+protein_data_wide_non_imputed <- protein_data_long %>%
+    dplyr::select(
+        Sample,
+        Protein,
+        normalised_intensity_log2
+    ) %>%
+    tidyr::pivot_wider(
+        names_from = Sample,
+        values_from = normalised_intensity_log2
+    ) %>%
+    tibble::column_to_rownames(
+        var = "Protein"
+    )
+
+# Find the indices of the missing values
+na_index <- which(is.na(protein_data_wide_non_imputed))
+
+# Initialize the weight matrix
+weight_matrix <- matrix(
+    data = 1,
+    nrow = nrow(protein_data_wide),
+    ncol = ncol(protein_data_wide)
+)
+# Weighting of Missing Values
+na_weight <- 0.0001
+# Replace the missing values with the na_weight
+weight_matrix[na_index] <- na_weight
+
+# Create the design matrix
+cur_meta <- as.data.frame(metadata)
+rownames(cur_meta) <- cur_meta$ID
+cur_meta <- cur_meta[
+    which(
+        rownames(cur_meta) %in% colnames(protein_data_wide)
+    ),
+]
+# Make sure the columns are in the same order
+design_matrix <- model.matrix(
+    ~ cur_meta[, "SampleType"]
+)
+
+# Variables
+pval_thr <- 0.05
+log2_fc_thr <- 1.0
+
+# Fit a linear model with weights
+fit <- limma::lmFit(
+    protein_data_wide,
+    design = design_matrix,
+    weights = weight_matrix
+)
+# Run the model
+fit_eb <- limma::eBayes(fit)
+# Get the log2 fold changes
+log2_fc <- fit_eb$coefficients[, 2]
+# Get the average intensities
+average <- fit_eb$Amean
+# Get the pvalues
+pvalues <- fit_eb$p.value[, 2]
+# Get the adjusted pvalues
+adj_pvalues <- p.adjust(
+    pvalues,
+    method = "fdr"
+)
+
+stat_res_df <- data.frame(
+    Protein = rownames(protein_data_wide),
+    log2_fc = log2_fc,
+    average = average,
+    pvalues = pvalues,
+    adj_pvalues = adj_pvalues
+)
+
+# Initialize significance column with no significance
+stat_res_df$significance <- "no significance"
+# Find Up and Down regulated proteins
+stat_res_df$significance[
+    (stat_res_df$adj_pvalues < pval_thr) &
+    (stat_res_df$log2_fc >= log2_fc_thr)
+] <- "Up regulated"
+stat_res_df$significance[
+    (stat_res_df$adj_pvalues < pval_thr) &
+    (stat_res_df$log2_fc <= -log2_fc_thr)
+] <- "Down regulated"
+# Make the significance column a factor column
+stat_res_df$significance <- as.factor(stat_res_df$significance)
+
+view(stat_res_df)
+
+ggplot2::ggplot(
+        stat_res_df,
+        ggplot2::aes(
+            x = log2_fc,
+            y = -log10(adj_pvalues),
+            color = significance,
+            alpha = significance
+        )
+    ) +
+    ggplot2::geom_point(size = 2) +
+    ggplot2::geom_vline(
+        xintercept = log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::geom_vline(
+        xintercept = -log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::geom_hline(
+        yintercept = -log10(pval_thr),
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::scale_color_manual(
+        values = c(
+            "Up regulated" = "#e63946",
+            "Down regulated" = "#1d3557",
+            "no significance" = "#b1a7a6"
+        )
+    ) +
+    ggplot2::scale_alpha_manual(
+        values = c(
+            "Up regulated" = 1.0,
+            "Down regulated" = 1.0,
+            "no significance" = 0.2
+        )
+    ) +
+    ggplot2::ggtitle("") +
+    ggplot2::labs(
+        x = "log2(Fold-Change)",
+        y = "-log10(adjusted p-value)"
+    )
+
+# Plot MA
+ggplot2::ggplot(
+        stat_res_df,
+        ggplot2::aes(
+            x = average,
+            y = log2_fc,
+            color = significance,
+            alpha = significance
+        )
+    ) +
+    ggplot2::geom_point(
+        size = 3.5,
+    ) +
+    ggplot2::geom_hline(
+        yintercept = log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    ggplot2::geom_hline(
+        yintercept = -log2_fc_thr,
+        linetype = "dashed",
+        color = "darkgrey"
+    ) +
+    # Draw a vertical line at the average intensity of 8
+    ggplot2::geom_vline(
+        xintercept = 8,
+        linetype = "dashed",
+        color = "#201717"
+    ) +
+    ggplot2::scale_color_manual(
+        values = c(
+            "Up regulated" = "#e63946",
+            "Down regulated" = "#1d3557",
+            "no significance" = "#b1a7a6"
+        )
+    ) +
+    ggplot2::scale_alpha_manual(
+        values = c(
+            "Up regulated" = 1.0,
+            "Down regulated" = 1.0,
+            "no significance" = 0.2
+        )
+    ) +
+    ggplot2::ggtitle("") +
+    ggplot2::labs(
+        x = "Average Intensity",
+        y = "log2(Fold-Change)"
+    )
+
