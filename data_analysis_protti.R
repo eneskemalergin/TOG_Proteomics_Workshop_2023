@@ -1,4 +1,4 @@
-# Proteomics Data Analysis with protti 
+# Proteomics Data Analysis with protti
 #   an R package for proteomics data analysis
 # TOG - Proteomics Workshop 2023
 # Author: Enes K. Ergin
@@ -8,6 +8,8 @@
 
 library(tidyverse) # Data manipulation
 library(protti) # Main proteomics analysis package
+# Load functions from utils.R
+source("utils.R")
 
 ## Prepare the Data for Analysis
 
@@ -20,9 +22,6 @@ unique(metadata$Disease)
 unique(metadata$Stage)
 # Find maximum number of Replicates
 max(metadata$Replica)
-
-# Peptide-Level Data (Removed to focus only on protein-level data)
-# peptide_data <- read_csv("data/peptide_data.csv")
 
 # Protein-Level Data
 protein_data <- read_csv("data/protein_data.csv")
@@ -49,18 +48,21 @@ protein_data_long <- dplyr::rename(
     "Sample" = "ID"
 )
 
+# Create a log2 transformed intensity column
+protein_data_long$Intensity_log2 <- log2(protein_data_long$Intensity)
+
 # BONUS 1 - Synthetic Data Generation
 # Creates 100 Proteins and their replicates with 5 replicates over 2 conditions
-# data <- protti::create_synthetic_data(
-#     n_proteins = 100,       # number of proteins 
-#     frac_change = 0.05,
-#     n_replicates = 5,
-#     n_conditions = 2,
-#     method = "effect_random",
-#     additional_metadata = TRUE
-# )
-# # Preview the data
-# head(data)
+data <- protti::create_synthetic_data(
+    n_proteins = 100,       # number of proteins
+    frac_change = 0.05,
+    n_replicates = 5,
+    n_conditions = 2,
+    method = "effect_random",
+    additional_metadata = TRUE
+)
+# Preview the data
+head(data)
 
 
 ## Quality Checks and Data Filtering
@@ -68,7 +70,7 @@ protein_data_long <- dplyr::rename(
 # 1. Number of Identified Proteins per Samples
 plot <- qc_ids(
     data = protein_data_long,
-    sample = SampleName, 
+    sample = SampleName,
     grouping = Protein,
     condition = SampleType,
     intensity = Intensity,
@@ -94,8 +96,7 @@ qc_intensity_distribution(
     intensity_log2 = Intensity,
     plot_style = "boxplot"
 )
-# Create a log2 transformed intensity column
-protein_data_long$Intensity_log2 <- log2(protein_data_long$Intensity)
+
 # Plot again with log2 transformed intensity
 qc_intensity_distribution(
     data = protein_data_long,
@@ -106,7 +107,6 @@ qc_intensity_distribution(
 )
 
 #   b. Median Intensity Plot
-# DESCRIPTION: Plot the median intensity of each protein across samples as a lineplot
 qc_median_intensities(
     data = protein_data_long,
     sample = SampleName,
@@ -115,8 +115,6 @@ qc_median_intensities(
 )
 
 # 3. Co-efficients of Variation (CV)
-# protti::qc_cvs() # Return DF or Plot (boxplot, violin, or density)
-
 # Within Sample CVs
 qc_cvs(
     data = protein_data_long,
@@ -124,7 +122,7 @@ qc_cvs(
     condition = SampleName,
     intensity = Intensity,
     plot = TRUE,
-    plot_style="boxplot"
+    plot_style = "boxplot"
 )
 
 # Within SampleType CVs (Patient, Cell Line, PDX)
@@ -137,7 +135,10 @@ qc_cvs(
     plot_style="boxplot"
 )
 
-# CVs between Samples in Patient+BALL, Patient+ALL, Cell Line+BALL, Cell Line+ALL, PDX+BALL, PDX+ALL
+# CVs between Samples in
+# Patient+BALL, Patient+ALL,
+# Cell Line+BALL, Cell Line+ALL
+# PDX+BALL, PDX+ALL
 # Combine CVs between SampleType+Disease
 protein_data_long$SampleType_Disease <- paste(
     protein_data_long$SampleType,
@@ -171,8 +172,8 @@ qc_sample_correlation(
     grouping = Protein,
     intensity = Intensity_log2,
     condition = SampleType,
-    interactive = FALSE, 
-    method = "pearson",
+    interactive = FALSE,
+    method = "pearson"
 )
 
 # 6. Principal Component Analysis (PCA)
@@ -207,7 +208,7 @@ qc_ranked_intensities(
   y_axis_transformation = "log2"
 )
 
-# 8. Removing Problematic Samples 
+# 8. Removing Problematic Samples
 # Remove instances where SampleName == "NP21"
 protein_data_long <- dplyr::filter(
     protein_data_long,
@@ -229,5 +230,92 @@ qc_pca(
   plot_style = "pca"
 )
 
-
 ## Data Normalization
+
+# Median Normalization using protti
+protein_data_long <- normalise(
+    data = protein_data_long,
+    sample = Sample,
+    intensity = Intensity_log2,
+    method = "median"
+) # Adds normalized_"intensity" column
+
+# Plot again with log2 transformed intensity
+qc_intensity_distribution(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity_log2 = normalised_intensity_log2,
+    plot_style = "boxplot"
+)
+
+b1 <- qc_median_intensities(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity = Intensity_log2
+) + ggplot2::ggtitle("Before Normalization")
+
+b2 <- qc_median_intensities(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity = normalised_intensity_log2
+) + ggplot2::ggtitle("After Normalization")
+
+# Plot the two plots side-by-side
+# TODO: Check if the cowplot package is installed on WIN11
+cowplot::plot_grid(
+    b1, b2,
+    ncol = 2
+)
+
+# Imputation of Missing Values
+
+# Impute missing values
+protein_data_long <- impute_with_downshifted_normal(
+    data = protein_data_long,
+    intensity_log2 = normalised_intensity_log2,
+    prctl = 0.05,
+    downshift_mag = 1.5,
+    downshift_min = 0.1
+)
+
+p1 <- qc_intensity_distribution(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity_log2 = normalised_intensity_log2,
+    plot_style = "violin"
+) + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+        angle = 90,
+        hjust = 1
+    )
+) + ggplot2::ggtitle(
+    "Non-Imputed Intensity Distribution"
+)
+
+
+p2 <- qc_intensity_distribution(
+    data = protein_data_long,
+    sample = SampleName,
+    grouping = Protein,
+    intensity_log2 = imputed_intensity_log2,
+    plot_style = "violin"
+) + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+        angle = 90,
+        hjust = 1
+    )
+) + ggplot2::ggtitle(
+    "Imputed Intensity Distribution"
+)
+
+cowplot::plot_grid(
+    p1, p2,
+    ncol = 2,
+    align = "v"
+)
+
+protein_data_long
