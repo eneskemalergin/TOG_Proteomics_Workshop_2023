@@ -6,6 +6,11 @@
 
 ## Load the packages required
 
+# Install the packages if not installed
+if (!requireNamespace("protti", quietly = TRUE))
+    install.packages("protti")
+if (!requireNamespace("tidyverse", quietly = TRUE))
+    install.packages("tidyverse")
 library(tidyverse) # Data manipulation
 library(protti) # Main proteomics analysis package
 # Load functions from utils.R
