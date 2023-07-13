@@ -318,7 +318,7 @@ cowplot::plot_grid(
     align = "v"
 )
 
-## Statistical Testing with Weighted Limma
+## Statistical Testing with Weighted Limma package
 
 # Transform the long to wide format
 # columns:Sample, rows: Protein, values: imputed_intensity_log2
@@ -518,3 +518,60 @@ ggplot2::ggplot(
         y = "log2(Fold-Change)"
     )
 
+# Enrichment Analysis with gProfiler2 package
+
+# Get the list of proteins
+# Background is the list of all proteins
+background <- rownames(protein_data_wide)
+# Initilize the query list
+go_list <- list()
+# Add the list of up regulated proteins
+go_list[["up_regulated"]] <- rownames(
+    stat_res_df[
+        which(
+            stat_res_df$significance == "Up regulated"
+        ),
+    ]
+)
+# Add the list of down regulated proteins
+go_list[["down_regulated"]] <- rownames(
+    stat_res_df[
+        which(
+            stat_res_df$significance == "Down regulated"
+        ),
+    ]
+)
+
+# Run the enrichment analysis with gProfiler2
+gostres <- gprofiler2::gost(
+    query = go_list[["up_regulated"]],
+    organism = "hsapiens",  # Human
+    user_threshold = 0.05,  # Enrichment p-value threshold
+    custom_bg = background, # Custom Background
+    domain_scope = "custom_annotated",
+    sources = c(            # Source of annotations
+        "GO:BP",
+        "GO:MF",
+        "GO:CC",
+        "KEGG",
+        "REAC"
+        # "WP",
+        # "HPA",
+        # "CORUM",
+        # "MIRNA",
+        # "TF",
+        # "HP"
+    ),
+    multi_query = FALSE,
+    correction_method = "fdr",
+)
+# Calculate Gene Ratio
+gostres$result$GeneRatio <- (
+    gostres$result$intersection_size / gostres$result$term_size
+)
+
+gprofiler2::gostplot(
+    gostres,
+    capped = TRUE,
+    interactive = TRUE,
+)
